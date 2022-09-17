@@ -1,0 +1,183 @@
+
+---
+title: "R Notebook"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+**Principles of Data Visualization and Introduction to ggplot2**
+
+I have provided you with data about the 5,000 fastest growing companies in the US, as compiled by Inc. magazine. lets read this in:
+
+```{r}
+inc <- read.csv("https://raw.githubusercontent.com/charleyferrari/CUNY_DATA_608/master/module1/Data/inc5000_data.csv", header= TRUE)
+```
+
+And lets preview this data:
+
+```{r}
+head(inc)
+```
+```{r}
+summary(inc)
+```
+
+Think a bit on what these summaries mean. Use the space below to add some more relevant non-visual exploratory information you think helps you understand this data
+
+
+Looks to me like there are possibly outliers in the growth rate, employees and the revenue. Let's take a look at those
+```{r}
+out <- boxplot.stats(inc$Growth_Rate)$out
+out_ind <- which(inc$Growth_Rate %in% c(out))
+inc[out_ind, ]
+```
+
+```{r}
+out <- boxplot.stats(inc$Employees)$out
+out_ind <- which(inc$Employees %in% c(out))
+inc[out_ind, ]
+```
+
+```{r}
+out <- boxplot.stats(inc$Revenue)$out
+out_ind <- which(inc$Revenue %in% c(out))
+inc[out_ind, ]
+```
+
+Doesn't look like generic outlier detection is very helpful here. For Growth rate it just pulled the top 649 and the bottom 1. The others as well there are way too many to really be considered outliers. We will need to take a closer look at the distributions instead. 
+```{r}
+
+
+summary(as.factor(inc[['Industry']]))
+
+```
+Looks like there are 25 industries, ranging from 44 to 733 entries. With IT being by far the most common.
+
+
+```{r}
+
+
+
+#This is a function to summarize categories
+get_cat_data = function(target,col,replace_na=NA) {
+   
+   col = replace(col,is.na(col),replace_na)
+   summ = aggregate(target, list(col), FUN=function(x) c(length(x),mean(x),median(x)))
+   summ[['Group.1']] = as.character(summ[['Group.1']])
+   summ = as.data.frame(cbind(summ$Group.1,summ$x[,1],summ$x[,2],summ$x[,3]))
+   colnames(summ) = c('value','count','mean','median')
+   summ['count'] = as.numeric(summ[['count']])
+   summ['mean'] = as.numeric(summ[['mean']])
+   summ['median'] = as.numeric(summ[['median']])
+
+   summ = summ[summ['count']>10,]
+   summ = summ[order(-summ['mean']),]
+   return(summ)
+}
+
+summ = get_cat_data(inc$Growth_Rate,inc$Industry)
+summ
+```
+You can see the mean is very high for some of these, but the median is more reasonable. Again, I don't think the distributions here are well represented by a normal distribution and so it's hard to get much out of these.
+
+## Question 1
+
+Create a graph that shows the distribution of companies in the dataset by State (ie how many are in each state). There are a lot of States, so consider which axis you should use. This visualization is ultimately going to be consumed on a 'portrait' oriented screen (ie taller than wide), which should further guide your layout choices.
+
+```{r}
+library(ggplot2)
+ggplot(inc, aes(x = reorder(inc$State,inc$State,length))) +
+  geom_bar() +
+  coord_flip() +
+  ggtitle("Number of Businesses by State") +
+  xlab('State')  +
+  ylab('Number of Businesses')
+        
+```
+
+## Quesiton 2
+
+Lets dig in on the state with the 3rd most companies in the data set. Imagine you work for the state and are interested in how many people are employed by companies in different industries. Create a plot that shows the average and/or median employment by industry for companies in this state (only use cases with full data, use R's `complete.cases()` function.) In addition to this, your graph should show how variable the ranges are, and you should deal with outliers.
+
+```{r}
+ny = inc[inc$State=="NY", ]
+print(paste(nrow(ny), 'records in NY'))
+ny = ny[complete.cases(ny), ]
+print(paste(nrow(ny),'complete records in NY'))
+```
+```{r}
+y_lim = 1500
+
+# remove some extreme values but label on the chart, so we could see the distributions better.
+caption = 'Extreme Values Removed for Clarity'
+outliers = ny[ny['Employees']>y_lim, c('Industry','Employees') ]
+for (i in 1:nrow(outliers)){
+   caption = paste0(caption,"\n",outliers[i,1],': ',outliers[i,2])
+}
+
+ggplot(ny, aes(x = reorder(Industry,Employees,median), y = Employees)) +
+  geom_boxplot() +
+  coord_flip() +
+  ylim(0,y_lim) +
+  ggtitle("Distribution of Employees by Industry") +
+  xlab('Industry')  +
+  ylab('Employees') +
+  annotate(
+      geom = "text", x = 12, y = 600, 
+      label = caption, hjust = 0, vjust = 1, size = 4
+  )
+
+```
+
+
+
+## Question 3
+
+Now imagine you work for an investor and want to see which industries generate the most revenue per employee. Create a chart that makes this information clear. Once again, the distribution per industry should be shown.
+
+```{r}
+y_lim = 12000000
+inc[['rpe']] = inc$Revenue/inc$Employees
+
+inc2 = inc[!is.na(inc$Employees),]
+missing_values = nrow(inc)-nrow(inc2)
+caption = paste0(missing_values," rows removed due to missing Employees Value\n\n")
+
+
+# remove some extreme values but label on the chart, so we could see the distributions better.
+caption = paste0(caption,'Extreme Values Removed for Clarity')
+outliers = inc2[inc2['rpe']>y_lim, c('Industry','rpe') ]
+for (i in 1:nrow(outliers)){
+   caption = paste0(caption,"\n",outliers[i,1],': ',outliers[i,2])
+}
+
+ggplot(inc2, aes(x = reorder(Industry,rpe,median), y = rpe)) +
+  geom_boxplot() +
+  coord_flip() +
+  ylim(0,y_lim) +
+  ggtitle("Revenue per Employee by Industry") +
+  xlab('Industry')  +
+  ylab('Revenue per Employee') +
+  annotate(
+      geom = "text", x = 7, y = 5500000, 
+      label = caption, hjust = 0, vjust = 1, size = 4
+  )
+```
+
+
+Footer
+© 2022 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Docs
+Contact GitHub
+Pricing
+API
+Training
+Blog
+About
+You have no unread notifications
